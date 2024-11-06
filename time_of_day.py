@@ -24,8 +24,10 @@ def parse_temporal_json_response(response, route_id):
         dow, minutes = dow_data
         min_time, avg_time, max_time = stats
 
-        # Convert minutes to HH:MM format
-        time_str = f"{minutes // 60}:{minutes % 60:02d}"
+        # Convert minutes to HH:MM format with proper padding
+        hours = minutes // 60
+        mins = minutes % 60
+        time_str = f"{hours:02d}:{mins:02d}"  # Use padding to ensure consistent format
         
         # Add row with statistics and metadata
         data.append([
@@ -37,9 +39,7 @@ def parse_temporal_json_response(response, route_id):
             max_time
         ])
     
-    # Update columns to reflect new data structure
-    columns = ['route_id', 'day_of_week', 'time', 'min_travel_time', 'avg_travel_time', 'max_travel_time']
-    return pd.DataFrame(data, columns=columns)
+    return pd.DataFrame(data, columns=['route_id', 'day_of_week', 'time', 'min_travel_time', 'avg_travel_time', 'max_travel_time'])
 
 def get_temporal_data(route_ids, start_datetime, end_datetime, username, password):
     # Define the API parameters
@@ -79,39 +79,51 @@ def get_temporal_data(route_ids, start_datetime, end_datetime, username, passwor
     # Combine all route data into a single DataFrame
     return pd.concat(all_parsed_data, ignore_index=True)
 
-
-# Inputs -------------------------------------------------------------------
-
-
-route_ids = [13236]
-
-# Data download window (YYYY-MM-DD HH:MM:SS)
-start_datetime_str = "2024-09-1 00:00:00"
-end_datetime_str = "2024-10-31 23:59:59"
-
-# Convert to datetime objects in local time, then convert to UTC
-local_tz = pytz.timezone('America/Denver')  # Salt Lake City uses Mountain Time
-start_datetime = local_tz.localize(datetime.strptime(start_datetime_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
-end_datetime = local_tz.localize(datetime.strptime(end_datetime_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
-
-# Get timeseries data
-data = get_temporal_data(route_ids, start_datetime, end_datetime, username, password)
-
 def process_temporal_data(data):
-
     # Filter out days of the week...
     data = data[data['day_of_week'] != 'sat']
     data = data[data['day_of_week'] != 'sun']
 
     # group data by time and calculate the average for each column
-    data_grouped = data.groupby('time').agg({
+    data_grouped = data.groupby(['route_id', 'time']).agg({
         'min_travel_time': 'min',
         'avg_travel_time': 'mean',
         'max_travel_time': 'max'
     }).reset_index()
-
+    
     return data_grouped
 
-data_grouped = process_temporal_data(data)
-# print the data
-print(data_grouped)
+# Inputs -------------------------------------------------------------------
+
+
+route_ids = [13237]
+
+# Data download windows (YYYY-MM-DD HH:MM:SS)
+window1_start_str = "2024-09-01 00:00:00"
+window1_end_str = "2024-09-30 23:59:59"
+window2_start_str = "2024-10-01 00:00:00"
+window2_end_str = "2024-10-31 23:59:59"
+
+# Convert to datetime objects in local time, then convert to UTC
+local_tz = pytz.timezone('America/Denver')  # Salt Lake City uses Mountain Time
+window1_start = local_tz.localize(datetime.strptime(window1_start_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
+window1_end = local_tz.localize(datetime.strptime(window1_end_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
+window2_start = local_tz.localize(datetime.strptime(window2_start_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
+window2_end = local_tz.localize(datetime.strptime(window2_end_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
+
+# Get timeseries data for both periods
+window1_data = get_temporal_data(route_ids, window1_start, window1_end, username, password)
+window2_data = get_temporal_data(route_ids, window2_start, window2_end, username, password)
+
+# Process both datasets
+window1_grouped = process_temporal_data(window1_data)
+window2_grouped = process_temporal_data(window2_data)
+
+# Add period labels
+window1_grouped['period'] = 'Window 1'
+window2_grouped['period'] = 'Window 2'
+
+# Combine the datasets
+combined_data = pd.concat([window1_grouped, window2_grouped], ignore_index=True)
+print(combined_data)
+
