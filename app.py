@@ -24,8 +24,8 @@ st.markdown(
         <img src="https://avenueconsultants.com/wp-content/themes/avenuecustom/webflow/images/a-blue.png" 
              style="width: 100px; margin-left: 20px;">
         <div>
-            <h1>Travel Time Comparison Tool</h1>
-            <p>Fetch data from Clearguide's travel times and speed contours APIs then display in summary tables, charts, and heatmaps.</p>
+            <h1>Travel Time Comparison</h1>
+            <p>Fetching data from Clearguide's travel times and speed contours APIs.</p>
         </div>
         
     </div>
