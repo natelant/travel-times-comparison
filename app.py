@@ -14,7 +14,9 @@ import os
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
     page_title='Travel Times',
-    page_icon=':sport_utility_vehicle:',
+    page_icon='🚙',  # Direct emoji
+    # or
+    # page_icon='sport_utility_vehicle',  # Shortcode without colons
 )
 
 # Add title and logo
