@@ -1,6 +1,5 @@
 import datetime
 from api.function import ClearGuideApiHandler
-import json
 from datetime import datetime, timezone
 import pandas as pd  
 import pytz
@@ -68,39 +67,39 @@ def get_timeseries_data(route_ids, start_datetime, end_datetime, username, passw
     # Combine all route data into a single DataFrame
     return pd.concat(all_parsed_data, ignore_index=True)
 
+def timeseries_comparison(route_ids, window1_start, window1_end, window2_start, window2_end, username, password):
+    # Convert both windows to datetime objects
+    local_tz = pytz.timezone('America/Denver')
+    windows = {
+        'window1': (
+            local_tz.localize(datetime.strptime(window1_start, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc),
+            local_tz.localize(datetime.strptime(window1_end, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
+        ),
+        'window2': (
+            local_tz.localize(datetime.strptime(window2_start, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc),
+            local_tz.localize(datetime.strptime(window2_end, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
+        )
+    }
 
-# Inputs -------------------------------------------------------------------
+    # Fetch data for both windows
+    data_window1 = get_timeseries_data(route_ids, windows['window1'][0], windows['window1'][1], username, password)
+    data_window2 = get_timeseries_data(route_ids, windows['window2'][0], windows['window2'][1], username, password)
 
+    # Add period column to each dataset
+    data_window1['period'] = 'window1'
+    data_window2['period'] = 'window2'
 
-route_ids = [13236]
+    # Combine the datasets
+    combined_data = pd.concat([data_window1, data_window2], ignore_index=True)
+    return combined_data
 
-# Data download windows (YYYY-MM-DD HH:MM:SS)
-window1_start = "2024-09-1 00:00:00"
-window1_end = "2024-09-30 23:59:59"
-window2_start = "2024-10-1 00:00:00"  # Previous year
-window2_end = "2024-10-31 23:59:59"
-
-# Convert both windows to datetime objects
-local_tz = pytz.timezone('America/Denver')
-windows = {
-    'window1': (
-        local_tz.localize(datetime.strptime(window1_start, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc),
-        local_tz.localize(datetime.strptime(window1_end, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
-    ),
-    'window2': (
-        local_tz.localize(datetime.strptime(window2_start, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc),
-        local_tz.localize(datetime.strptime(window2_end, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
-    )
-}
-
-# Fetch data for both windows
-data_window1 = get_timeseries_data(route_ids, windows['window1'][0], windows['window1'][1], username, password)
-data_window2 = get_timeseries_data(route_ids, windows['window2'][0], windows['window2'][1], username, password)
-
-# Add period column to each dataset
-data_window1['period'] = 'window1'
-data_window2['period'] = 'window2'
-
-# Combine the datasets
-combined_data = pd.concat([data_window1, data_window2], ignore_index=True)
-print(combined_data)
+# Example usage:
+# combined_data = timeseries_comparison(
+#     route_ids=[13236],
+#     window1_start="2024-09-01 00:00:00",
+#     window1_end="2024-09-30 23:59:59",
+#     window2_start="2024-10-01 00:00:00",
+#     window2_end="2024-10-31 23:59:59",
+#     username="your_username",
+#     password="your_password"
+# )
