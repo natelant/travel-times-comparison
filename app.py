@@ -38,7 +38,7 @@ st.markdown(
 # Add some vertical space
 st.markdown("<br>", unsafe_allow_html=True)
 
-# File upload section
+# Data input section ----------------------------------------------------
 st.header('Data Input')
 st.write(
     '''
