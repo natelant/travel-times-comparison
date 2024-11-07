@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 import pandas as pd  
 import pytz
 from scipy import stats
+import os
+from dotenv import load_dotenv
 
-
-
+# Load environment variables
+load_dotenv()
 
 # Functions -----------------------------------------------------------------
 #-------------------------------------------------------------------------
@@ -94,16 +96,6 @@ def timeseries_comparison(route_ids, window1_start, window1_end, window2_start, 
     combined_data = pd.concat([data_window1, data_window2], ignore_index=True)
     return combined_data
 
-# Example usage:
-# combined_data = timeseries_comparison(
-#     route_ids=[13236, 13237],
-#     window1_start="2024-09-01 00:00:00",
-#     window1_end="2024-09-30 23:59:59",
-#     window2_start="2024-10-01 00:00:00",
-#     window2_end="2024-10-31 23:59:59",
-
-# )
-
 def summary_table(combined_data):
 
     # Filter goes here...
@@ -141,5 +133,17 @@ def summary_table(combined_data):
     # Reset index to make route_id a regular column
     return summary_pivoted.reset_index()
 
-# print(summary_table(combined_data))
+# -------------------------------------------------------------------------
+# Example usage:
+combined_data = timeseries_comparison(
+    route_ids=[13236, 13237],
+    window1_start="2024-09-01 00:00:00",
+    window1_end="2024-09-30 23:59:59",
+    window2_start="2024-10-01 00:00:00",
+    window2_end="2024-10-31 23:59:59",
+    username=os.getenv('CG_USERNAME'),
+    password=os.getenv('CG_PASSWORD')
+)
+
+print(summary_table(combined_data))
 
