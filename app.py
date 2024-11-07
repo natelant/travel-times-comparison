@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 import datetime
 from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
-import pandas as pd  
 import pytz
 from timeseries import timeseries_comparison
 from timeseries import summary_table
@@ -85,18 +84,28 @@ window1_end_str = f"{window1_end} 23:59:59"
 window2_start_str = f"{window2_start} 00:00:00"
 window2_end_str = f"{window2_end} 23:59:59"
 
+# Define a function to fetch and cache the data
+@st.cache_data
+def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
+    return timeseries_comparison(
+        route_ids,
+        window1_start_str,
+        window1_end_str,
+        window2_start_str,
+        window2_end_str,
+        username,
+        password
+    )
+
 # Add a button to trigger the analysis
 if st.button("Analyze Data"):
     if not route_ids:
         st.warning("Please enter at least one Route ID")
     else:
         try:
-            # Here you'll call your comparison functions
+            # Fetch and cache the data
             st.info("Processing data... Please wait.")
-            
-            # Example calls (commented out until authentication is handled)
-            # temporal_data = temporal_comparison(...)
-            timeseries_data = timeseries_comparison(
+            timeseries_data = fetch_timeseries_data(
                 route_ids,
                 window1_start_str,
                 window1_end_str,
