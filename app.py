@@ -10,9 +10,8 @@ import datetime
 from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
 import pytz
-from timeseries import timeseries_comparison
-from timeseries import summary_table
-from time_of_day import temporal_comparison
+from timeseries import timeseries_comparison, build_timeseries_plot, summary_table
+from time_of_day import temporal_comparison, build_time_of_day_plot, process_temporal_data
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -97,6 +96,20 @@ def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2
         password
     )
 
+@st.cache_data
+def fetch_time_of_day_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
+    return temporal_comparison(
+        route_ids,
+        window1_start_str,
+        window1_end_str,
+        window2_start_str,
+        window2_end_str,
+        username,
+        password
+    )
+    
+    
+
 # Split into two buttons
 if st.button("Fetch Data"):
     if not route_ids:
@@ -114,20 +127,95 @@ if st.button("Fetch Data"):
                 username,
                 password
             )
+
+            st.session_state.time_of_day_data = fetch_time_of_day_data(
+                route_ids,
+                window1_start_str,
+                window1_end_str,
+                window2_start_str,
+                window2_end_str,
+                username,
+                password
+            )
+
+
             st.success("Data fetched successfully!")
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
+
+# Add day of week filters
+st.subheader("Day of Week Filters")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.write("Select days to include:")
+    days_of_week = {
+        'Monday': st.checkbox('Monday', value=True),
+        'Tuesday': st.checkbox('Tuesday', value=True),
+        'Wednesday': st.checkbox('Wednesday', value=True),
+        'Thursday': st.checkbox('Thursday', value=True),
+        'Friday': st.checkbox('Friday', value=True),
+        'Saturday': st.checkbox('Saturday', value=True),
+        'Sunday': st.checkbox('Sunday', value=True)
+    }
+    selected_days = [day for day, selected in days_of_week.items() if selected]
+
+with col2:
+    st.write("Enter dates to exclude (YYYY-MM-DD):")
+    excluded_dates_input = st.text_area(
+        "One date per line",
+        help="Example:\n2024-03-15\n2024-03-16",
+        key="excluded_dates"
+    )
+    excluded_dates = [date.strip() for date in excluded_dates_input.split('\n') if date.strip()]
 
 # Only show analyze button if data exists
 if 'timeseries_data' in st.session_state:
     if st.button("Analyze Data"):
         try:
-            # Get the summary table from cached data
-            summary_df = summary_table(st.session_state.timeseries_data)
+            # Create columns for each route ID
+            num_routes = len(route_ids)
+            plot_cols = st.columns(num_routes)
+
+            # Display time of day plots for each route
+            st.subheader("Time of Day Comparison by Route")
+            for idx, route_id in enumerate(route_ids):
+                with plot_cols[idx]:
+                    st.write(f"Route {route_id}")
+                    cached_data = st.session_state.time_of_day_data
+                    processed_data = process_temporal_data(cached_data, selected_days=selected_days, excluded_dates=excluded_dates)
+                    
+                    # Create the plot
+                    st.plotly_chart(
+                        build_time_of_day_plot(processed_data),
+                        use_container_width=True
+                    )
+                    
+            
             
             # Display the summary table
             st.subheader("Summary Statistics")
+            # Get the summary table from cached data
+            summary_df = summary_table(st.session_state.timeseries_data, selected_days=selected_days, excluded_dates=excluded_dates)
             st.dataframe(summary_df, use_container_width=True)
+
+            
+
+            # Display time series plots for each route
+            st.subheader("Time Series Comparison by Route")
+            for idx, route_id in enumerate(route_ids):
+                with plot_cols[idx]:
+                    st.write(f"Route {route_id}")
+                    filtered_data = st.session_state.timeseries_data[
+                        st.session_state.timeseries_data['route_id'] == route_id
+                    ]
+                    st.plotly_chart(
+                        build_timeseries_plot(filtered_data, selected_days=selected_days, excluded_dates=excluded_dates),
+                        use_container_width=True
+                    )
+
+            
+
             
         except Exception as e:
             st.error(f"An error occurred during analysis: {str(e)}")

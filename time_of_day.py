@@ -3,6 +3,7 @@ from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
 import pandas as pd  
 import pytz
+import plotly.graph_objects as go
 
 import os
 from dotenv import load_dotenv
@@ -84,20 +85,6 @@ def get_temporal_data(route_ids, start_datetime, end_datetime, username, passwor
     # Combine all route data into a single DataFrame
     return pd.concat(all_parsed_data, ignore_index=True)
 
-def process_temporal_data(data):
-    # Filter out days of the week...
-    data = data[data['day_of_week'] != 'sat']
-    data = data[data['day_of_week'] != 'sun']
-
-    # group data by time and calculate the average for each column
-    data_grouped = data.groupby(['route_id', 'time']).agg({
-        'min_travel_time': 'min',
-        'avg_travel_time': 'mean',
-        'max_travel_time': 'max'
-    }).reset_index()
-    
-    return data_grouped
-
 def temporal_comparison(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
     # Convert to datetime objects in local time, then convert to UTC
     local_tz = pytz.timezone('America/Denver')  # Salt Lake City uses Mountain Time
@@ -106,30 +93,125 @@ def temporal_comparison(route_ids, window1_start_str, window1_end_str, window2_s
     window2_start = local_tz.localize(datetime.strptime(window2_start_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
     window2_end = local_tz.localize(datetime.strptime(window2_end_str, "%Y-%m-%d %H:%M:%S")).astimezone(timezone.utc)
 
-    # Get timeseries data for both periods
+    # Get raw timeseries data for both periods
     window1_data = get_temporal_data(route_ids, window1_start, window1_end, username, password)
     window2_data = get_temporal_data(route_ids, window2_start, window2_end, username, password)
 
-    # Process both datasets
-    window1_grouped = process_temporal_data(window1_data)
-    window2_grouped = process_temporal_data(window2_data)
+    # Add period labels to each dataframe
+    window1_data['period'] = 'Window 1'
+    window2_data['period'] = 'Window 2'
 
-    # Add period labels
-    window1_grouped['period'] = 'Window 1'
-    window2_grouped['period'] = 'Window 2'
-
-    # Combine the datasets
-    combined_data = pd.concat([window1_grouped, window2_grouped], ignore_index=True)
+    # Combine the dataframes
+    combined_data = pd.concat([window1_data, window2_data], ignore_index=True)
+    
     return combined_data
 
+def process_temporal_data(data, selected_days=None, excluded_dates=None):
+    # Create a working copy of the data
+    filtered_data = data.copy()
+    
+    # Convert timestamp to day of week
+    filtered_data['day_name'] = pd.to_datetime(filtered_data['timestamp']).dt.strftime('%A')
+    
+    # Filter by selected days if provided
+    if selected_days:
+        filtered_data = filtered_data[filtered_data['day_name'].isin(selected_days)]
+    
+    # Filter out excluded dates if provided
+    if excluded_dates:
+        filtered_data['date'] = pd.to_datetime(filtered_data['timestamp']).dt.strftime('%Y-%m-%d')
+        filtered_data = filtered_data[~filtered_data['date'].isin(excluded_dates)]
+
+    # Group data by time and calculate the average for each column
+    filtered_data['time'] = pd.to_datetime(filtered_data['timestamp']).dt.strftime('%H:%M')
+    data_grouped = filtered_data.groupby(['route_id', 'period','time']).agg({
+        'min_travel_time': 'min',
+        'avg_travel_time': 'mean',
+        'max_travel_time': 'max'
+    }).reset_index()
+    
+    return data_grouped
+
+def build_time_of_day_plot(combined_data):
+    fig = go.Figure()
+    
+    # Create separate traces for Window 1 and Window 2
+    for period, color in [('Window 1', 'navy'), ('Window 2', 'blue')]:
+        # Create an explicit copy of the filtered data
+        period_data = combined_data[combined_data['period'] == period].copy()
+        
+        # Convert time strings to datetime for proper sorting
+        period_data['datetime'] = pd.to_datetime(period_data['time'], format='%H:%M')
+        period_data = period_data.sort_values('datetime')
+        
+        # Add the main line for both windows
+        fig.add_trace(go.Scatter(
+            x=period_data['time'],
+            y=period_data['avg_travel_time'],
+            name=period,
+            line=dict(color=color),
+            mode='lines'
+        ))
+        
+        # Add min/max range only for Window 2
+        if period == 'Window 2':
+            fig.add_trace(go.Scatter(
+                x=period_data['time'],
+                y=period_data['max_travel_time'],
+                name='Window 2 Range',
+                mode='lines',
+                line=dict(width=0),
+                showlegend=True,
+                legendgroup='range',
+                fillcolor='rgba(0, 0, 255, 0.2)'
+            ))
+            fig.add_trace(go.Scatter(
+                x=period_data['time'],
+                y=period_data['min_travel_time'],
+                name='Window 2 Range',
+                mode='lines',
+                line=dict(width=0),
+                fillcolor='rgba(0, 0, 255, 0.2)',
+                fill='tonexty',
+                showlegend=False,
+                legendgroup='range'
+            ))
+    
+    # Update layout
+    fig.update_layout(
+        title='Travel Time by Time of Day',
+        xaxis_title='Time of Day',
+        yaxis_title='Travel Time (minutes)',
+        showlegend=True,
+        xaxis=dict(
+            tickformat='%H:%M',
+            tickmode='array',
+            # Create ticks for every hour (00:00 to 23:00)
+            tickvals=[f"{i:02d}:00" for i in range(24)],
+            ticktext=[f"{i:02d}:00" for i in range(24)],
+            tickangle=45,
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray'
+        )
+    )
+    
+    return fig
+
 # Example usage:
-# combined_data = temporal_comparison(
-#     route_ids=[13237],
-#     window1_start_str="2024-09-01 00:00:00",
-#     window1_end_str="2024-09-30 23:59:59",
-#     window2_start_str="2024-10-01 00:00:00",
-#     window2_end_str="2024-10-31 23:59:59",
-#     username=os.getenv('CG_USERNAME'),
-#     password=os.getenv('CG_PASSWORD')
-# )
+combined_data = temporal_comparison(
+    route_ids=[13237],
+    window1_start_str="2024-09-01 00:00:00",
+    window1_end_str="2024-09-30 23:59:59",
+    window2_start_str="2024-10-01 00:00:00",
+    window2_end_str="2024-10-31 23:59:59",
+    username=os.getenv('CG_USERNAME'),
+    password=os.getenv('CG_PASSWORD')
+)
+
+print(combined_data)
+
+# fig = build_time_of_day_plot(combined_data)
+# fig.show()
+
 

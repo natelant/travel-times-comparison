@@ -6,6 +6,7 @@ import pytz
 from scipy import stats
 import os
 from dotenv import load_dotenv
+import plotly.graph_objects as go
 
 # Load environment variables
 load_dotenv()
@@ -96,9 +97,15 @@ def timeseries_comparison(route_ids, window1_start, window1_end, window2_start, 
     combined_data = pd.concat([data_window1, data_window2], ignore_index=True)
     return combined_data
 
-def summary_table(combined_data):
+def summary_table(combined_data, selected_days, excluded_dates):
 
-    # Filter goes here...
+    # Filter excluded dates
+    combined_data['date'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%Y-%m-%d')
+    combined_data = combined_data[~combined_data['date'].isin(excluded_dates)]
+
+    # Filter selected days
+    combined_data['day_name'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%A')
+    combined_data = combined_data[combined_data['day_name'].isin(selected_days)]
 
     # Group by route_id and period, calculate summary statistics
     summary = combined_data.groupby(['route_id', 'period'])['travel_time'].agg([
@@ -133,17 +140,71 @@ def summary_table(combined_data):
     # Reset index to make route_id a regular column
     return summary_pivoted.reset_index()
 
+def build_timeseries_plot(combined_data, selected_days, excluded_dates):
+
+    # Filter excluded dates
+    combined_data['date'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%Y-%m-%d')
+    combined_data = combined_data[~combined_data['date'].isin(excluded_dates)]
+
+    # Filter selected days
+    combined_data['day_name'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%A')
+    combined_data = combined_data[combined_data['day_name'].isin(selected_days)]
+
+    fig = go.Figure()
+    
+    # Add traces for each window
+    fig.add_trace(go.Scatter(
+        x=combined_data[combined_data['period'] == 'window1']['timestamp'],
+        y=combined_data[combined_data['period'] == 'window1']['travel_time'],
+        mode='markers',
+        name='Window 1',
+        marker=dict(color='navy', size=6)
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=combined_data[combined_data['period'] == 'window2']['timestamp'],
+        y=combined_data[combined_data['period'] == 'window2']['travel_time'],
+        mode='markers',
+        name='Window 2',
+        marker=dict(color='blue', size=6)
+    ))
+
+    # Calculate and add mean lines for each window
+    window1_mean = combined_data[combined_data['period'] == 'window1']['travel_time'].mean()
+    window2_mean = combined_data[combined_data['period'] == 'window2']['travel_time'].mean()
+
+    # Add horizontal mean lines
+    fig.add_hline(y=window1_mean, line_dash="dash", line_color="navy", 
+                 annotation_text=f"Window 1 Mean: {window1_mean:.2f}")
+    fig.add_hline(y=window2_mean, line_dash="dash", line_color="red", 
+                 annotation_text=f"Window 2 Mean: {window2_mean:.2f}")
+    
+    # Update layout
+    fig.update_layout(
+        title='Timeseries Comparison',
+        xaxis_title='Timestamp',
+        yaxis_title='Travel Time (minutes)',
+        showlegend=True,
+        template='plotly_white'
+    )
+    
+    return fig
+
 # -------------------------------------------------------------------------
 # Example usage:
-# combined_data = timeseries_comparison(
-#     route_ids=[13236, 13237],
-#     window1_start="2024-09-01 00:00:00",
-#     window1_end="2024-09-30 23:59:59",
-#     window2_start="2024-10-01 00:00:00",
-#     window2_end="2024-10-31 23:59:59",
-#     username=os.getenv('CG_USERNAME'),
-#     password=os.getenv('CG_PASSWORD')
-# )
+combined_data = timeseries_comparison(
+    route_ids=[13236, 13237],
+    window1_start="2024-09-01 00:00:00",
+    window1_end="2024-09-30 23:59:59",
+    window2_start="2024-10-01 00:00:00",
+    window2_end="2024-10-31 23:59:59",
+    username=os.getenv('CG_USERNAME'),
+    password=os.getenv('CG_PASSWORD')
+)
 
-# print(summary_table(combined_data))
+print((combined_data))
+
+# # show the plot
+# fig = build_timeseries_plot(combined_data)
+# fig.show()
 
