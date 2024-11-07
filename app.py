@@ -11,7 +11,7 @@ from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
 import pytz
 from timeseries import timeseries_comparison, build_timeseries_plot, summary_table, process_time_of_day, build_time_of_day_plot
-#from time_of_day import process_temporal_data, temporal_comparison
+
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -96,17 +96,6 @@ def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2
         password
     )
 
-# @st.cache_data
-# def fetch_time_of_day_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
-#     return temporal_comparison(
-#         route_ids,
-#         window1_start_str,
-#         window1_end_str,
-#         window2_start_str,
-#         window2_end_str,
-#         username,
-#         password
-#     )
     
     
 
@@ -127,16 +116,6 @@ if st.button("Fetch Data"):
                 username,
                 password
             )
-
-            # st.session_state.time_of_day_data = fetch_time_of_day_data(
-            #     route_ids,
-            #     window1_start_str,
-            #     window1_end_str,
-            #     window2_start_str,
-            #     window2_end_str,
-            #     username,
-            #     password
-            # )
 
 
             st.success("Data fetched successfully!")
