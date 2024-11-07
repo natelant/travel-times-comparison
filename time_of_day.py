@@ -123,13 +123,13 @@ def temporal_comparison(route_ids, window1_start_str, window1_end_str, window2_s
     return combined_data
 
 # Example usage:
-combined_data = temporal_comparison(
-    route_ids=[13237],
-    window1_start_str="2024-09-01 00:00:00",
-    window1_end_str="2024-09-30 23:59:59",
-    window2_start_str="2024-10-01 00:00:00",
-    window2_end_str="2024-10-31 23:59:59",
-    username=os.getenv('CG_USERNAME'),
-    password=os.getenv('CG_PASSWORD')
-)
+# combined_data = temporal_comparison(
+#     route_ids=[13237],
+#     window1_start_str="2024-09-01 00:00:00",
+#     window1_end_str="2024-09-30 23:59:59",
+#     window2_start_str="2024-10-01 00:00:00",
+#     window2_end_str="2024-10-31 23:59:59",
+#     username=os.getenv('CG_USERNAME'),
+#     password=os.getenv('CG_PASSWORD')
+# )
 
