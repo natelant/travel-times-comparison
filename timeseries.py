@@ -141,5 +141,5 @@ def summary_table(combined_data):
     # Reset index to make route_id a regular column
     return summary_pivoted.reset_index()
 
-print(summary_table(combined_data))
+# print(summary_table(combined_data))
 
