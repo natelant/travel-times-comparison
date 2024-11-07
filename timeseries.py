@@ -3,6 +3,7 @@ from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
 import pandas as pd  
 import pytz
+from scipy import stats
 
 
 
@@ -95,11 +96,50 @@ def timeseries_comparison(route_ids, window1_start, window1_end, window2_start, 
 
 # Example usage:
 # combined_data = timeseries_comparison(
-#     route_ids=[13236],
+#     route_ids=[13236, 13237],
 #     window1_start="2024-09-01 00:00:00",
 #     window1_end="2024-09-30 23:59:59",
 #     window2_start="2024-10-01 00:00:00",
 #     window2_end="2024-10-31 23:59:59",
-#     username="your_username",
-#     password="your_password"
+
 # )
+
+def summary_table(combined_data):
+
+    # Filter goes here...
+
+    # Group by route_id and period, calculate summary statistics
+    summary = combined_data.groupby(['route_id', 'period'])['travel_time'].agg([
+        ('mean', 'mean'),
+        ('n', 'count')  # Add count to get sample size
+    ]).round(2)
+    
+    # Pivot the table to have windows as columns
+    summary_pivoted = summary.unstack(level='period')
+    
+    # Calculate the difference and percent change
+    summary_pivoted['diff'] = summary_pivoted[('mean', 'window2')] - summary_pivoted[('mean', 'window1')]
+    summary_pivoted['pct_change'] = (summary_pivoted['diff'] / summary_pivoted[('mean', 'window1')]) * 100
+
+    # Calculate p-value for each route using t-test
+    def calculate_pvalue(route_id):
+        window1_data = combined_data[(combined_data['route_id'] == route_id) & 
+                                   (combined_data['period'] == 'window1')]['travel_time']
+        window2_data = combined_data[(combined_data['route_id'] == route_id) & 
+                                   (combined_data['period'] == 'window2')]['travel_time']
+        _, p_value = stats.ttest_ind(window1_data, window2_data)
+        # Format very small p-values
+        return f'{p_value:.4e}' if p_value < 0.0001 else f'{p_value:.4f}'
+
+    # Add p-values to the summary table
+    summary_pivoted['p_value'] = summary_pivoted.index.map(calculate_pvalue)
+
+    # Flatten column names
+    summary_pivoted.columns = [f'{window}_{stat}' 
+                             for window, stat in summary_pivoted.columns]
+
+    # Reset index to make route_id a regular column
+    return summary_pivoted.reset_index()
+
+print(summary_table(combined_data))
+
