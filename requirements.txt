@@ -5,7 +5,5 @@ plotly
 requests
 scipy
 pytz
-datetime
-os
 python-dotenv
 
