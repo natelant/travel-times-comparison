@@ -147,7 +147,7 @@ def build_time_of_day_plot(combined_data):
         # Add the main line for both windows
         fig.add_trace(go.Scatter(
             x=period_data['time'],
-            y=period_data['avg_travel_time'],
+            y=period_data['travel_time_mean'],
             name=period,
             line=dict(color=color),
             mode='lines'
@@ -157,7 +157,7 @@ def build_time_of_day_plot(combined_data):
         if period == 'Window 2':
             fig.add_trace(go.Scatter(
                 x=period_data['time'],
-                y=period_data['max_travel_time'],
+                y=period_data['travel_time_max'],
                 name='Window 2 Range',
                 mode='lines',
                 line=dict(width=0),
@@ -167,7 +167,7 @@ def build_time_of_day_plot(combined_data):
             ))
             fig.add_trace(go.Scatter(
                 x=period_data['time'],
-                y=period_data['min_travel_time'],
+                y=period_data['travel_time_min'],
                 name='Window 2 Range',
                 mode='lines',
                 line=dict(width=0),
@@ -199,17 +199,17 @@ def build_time_of_day_plot(combined_data):
     return fig
 
 # Example usage:
-combined_data = temporal_comparison(
-    route_ids=[13237],
-    window1_start_str="2024-09-01 00:00:00",
-    window1_end_str="2024-09-30 23:59:59",
-    window2_start_str="2024-10-01 00:00:00",
-    window2_end_str="2024-10-31 23:59:59",
-    username=os.getenv('CG_USERNAME'),
-    password=os.getenv('CG_PASSWORD')
-)
+# combined_data = temporal_comparison(
+#     route_ids=[13237],
+#     window1_start_str="2024-09-01 00:00:00",
+#     window1_end_str="2024-09-30 23:59:59",
+#     window2_start_str="2024-10-01 00:00:00",
+#     window2_end_str="2024-10-31 23:59:59",
+#     username=os.getenv('CG_USERNAME'),
+#     password=os.getenv('CG_PASSWORD')
+# )
 
-print(combined_data)
+# print(combined_data)
 
 # fig = build_time_of_day_plot(combined_data)
 # fig.show()

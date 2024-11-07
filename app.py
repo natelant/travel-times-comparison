@@ -10,8 +10,8 @@ import datetime
 from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
 import pytz
-from timeseries import timeseries_comparison, build_timeseries_plot, summary_table
-from time_of_day import temporal_comparison, build_time_of_day_plot, process_temporal_data
+from timeseries import timeseries_comparison, build_timeseries_plot, summary_table, process_time_of_day, build_time_of_day_plot
+#from time_of_day import process_temporal_data, temporal_comparison
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -96,17 +96,17 @@ def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2
         password
     )
 
-@st.cache_data
-def fetch_time_of_day_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
-    return temporal_comparison(
-        route_ids,
-        window1_start_str,
-        window1_end_str,
-        window2_start_str,
-        window2_end_str,
-        username,
-        password
-    )
+# @st.cache_data
+# def fetch_time_of_day_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
+#     return temporal_comparison(
+#         route_ids,
+#         window1_start_str,
+#         window1_end_str,
+#         window2_start_str,
+#         window2_end_str,
+#         username,
+#         password
+#     )
     
     
 
@@ -128,15 +128,15 @@ if st.button("Fetch Data"):
                 password
             )
 
-            st.session_state.time_of_day_data = fetch_time_of_day_data(
-                route_ids,
-                window1_start_str,
-                window1_end_str,
-                window2_start_str,
-                window2_end_str,
-                username,
-                password
-            )
+            # st.session_state.time_of_day_data = fetch_time_of_day_data(
+            #     route_ids,
+            #     window1_start_str,
+            #     window1_end_str,
+            #     window2_start_str,
+            #     window2_end_str,
+            #     username,
+            #     password
+            # )
 
 
             st.success("Data fetched successfully!")
@@ -173,45 +173,56 @@ with col2:
 if 'timeseries_data' in st.session_state:
     if st.button("Analyze Data"):
         try:
+            # Display the summary table
+            st.subheader("Summary Statistics")
+            # Get the summary table from cached data
+            summary_df = summary_table(st.session_state.timeseries_data, selected_days=selected_days, excluded_dates=excluded_dates)
+            # Format numbers: integers with no decimals, floats with 2 decimal places
+            st.dataframe(
+                summary_df.style
+                    .format({
+                        col: '{:.0f}' if summary_df[col].dtype == 'int64' else '{:.2f}'
+                        for col in summary_df.select_dtypes(include=['float64', 'int64']).columns
+                    })
+                    .applymap(lambda x: 'background-color: #90EE90' if isinstance(x, (int, float)) and x < 0 else '')
+                    ,
+                use_container_width=True
+            )
+
             # Create columns for each route ID
             num_routes = len(route_ids)
             plot_cols = st.columns(num_routes)
 
             # Display time of day plots for each route
-            st.subheader("Time of Day Comparison by Route")
-            for idx, route_id in enumerate(route_ids):
-                with plot_cols[idx]:
-                    st.write(f"Route {route_id}")
-                    cached_data = st.session_state.time_of_day_data
-                    processed_data = process_temporal_data(cached_data, selected_days=selected_days, excluded_dates=excluded_dates)
-                    
-                    # Create the plot
-                    st.plotly_chart(
-                        build_time_of_day_plot(processed_data),
-                        use_container_width=True
-                    )
-                    
-            
-            
-            # Display the summary table
-            st.subheader("Summary Statistics")
-            # Get the summary table from cached data
-            summary_df = summary_table(st.session_state.timeseries_data, selected_days=selected_days, excluded_dates=excluded_dates)
-            st.dataframe(summary_df, use_container_width=True)
-
-            
-
-            # Display time series plots for each route
-            st.subheader("Time Series Comparison by Route")
+            #st.subheader("Time of Day Comparison by Route")
             for idx, route_id in enumerate(route_ids):
                 with plot_cols[idx]:
                     st.write(f"Route {route_id}")
                     filtered_data = st.session_state.timeseries_data[
                         st.session_state.timeseries_data['route_id'] == route_id
                     ]
+                    processed_data = process_time_of_day(filtered_data, selected_days=selected_days, excluded_dates=excluded_dates)
+                    
+                    # Added unique key for time of day plot
+                    st.plotly_chart(
+                        build_time_of_day_plot(processed_data),
+                        use_container_width=True,
+                        key=f"tod_plot_{route_id}"  # Added unique key
+                    )
+
+            # Display time series plots for each route
+            #st.subheader("Time Series Comparison by Route")
+            for idx, route_id in enumerate(route_ids):
+                with plot_cols[idx]:
+                    st.write(f"Route {route_id}")
+                    filtered_data = st.session_state.timeseries_data[
+                        st.session_state.timeseries_data['route_id'] == route_id
+                    ]
+                    # Added unique key for time series plot
                     st.plotly_chart(
                         build_timeseries_plot(filtered_data, selected_days=selected_days, excluded_dates=excluded_dates),
-                        use_container_width=True
+                        use_container_width=True,
+                        key=f"ts_plot_{route_id}"  # Added unique key
                     )
 
             

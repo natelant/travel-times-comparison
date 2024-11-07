@@ -116,29 +116,49 @@ def summary_table(combined_data, selected_days, excluded_dates):
     # Pivot the table to have windows as columns
     summary_pivoted = summary.unstack(level='period')
     
-    # Calculate the difference and percent change
-    summary_pivoted['diff'] = summary_pivoted[('mean', 'window2')] - summary_pivoted[('mean', 'window1')]
-    summary_pivoted['pct_change'] = (summary_pivoted['diff'] / summary_pivoted[('mean', 'window1')]) * 100
+    # Flatten column names
+    summary_pivoted.columns = [f'{col[1]}_{col[0]}' if isinstance(col, tuple) else col 
+                             for col in summary_pivoted.columns]
+    
+    # Reset index to make route_id a regular column
+    summary_pivoted = summary_pivoted.reset_index()
 
-    # Calculate p-value for each route using t-test
+    # Calculate the difference and percent change
+    summary_pivoted['diff'] = summary_pivoted['window2_mean'] - summary_pivoted['window1_mean']
+    summary_pivoted['pct_change'] = (summary_pivoted['diff'] / summary_pivoted['window1_mean']) * 100
+
+    # Calculate p-values
     def calculate_pvalue(route_id):
         window1_data = combined_data[(combined_data['route_id'] == route_id) & 
                                    (combined_data['period'] == 'window1')]['travel_time']
         window2_data = combined_data[(combined_data['route_id'] == route_id) & 
                                    (combined_data['period'] == 'window2')]['travel_time']
         _, p_value = stats.ttest_ind(window1_data, window2_data)
-        # Format very small p-values
         return f'{p_value:.4e}' if p_value < 0.0001 else f'{p_value:.4f}'
 
     # Add p-values to the summary table
-    summary_pivoted['p_value'] = summary_pivoted.index.map(calculate_pvalue)
+    summary_pivoted['p_value'] = summary_pivoted['route_id'].map(calculate_pvalue)
 
-    # Flatten column names
-    summary_pivoted.columns = [f'{window}_{stat}' 
-                             for window, stat in summary_pivoted.columns]
+    # Create a mapping for prettier column names
+    column_mapping = {
+        'route_id': 'Route ID',
+        'window1_mean': 'Mean (Window 1)',
+        'window2_mean': 'Mean (Window 2)',
+        'diff': 'Change (Minutes)',
+        'pct_change': '% Change',
+        'p_value': 'P-Value',
+        'window1_n': 'Sample Size (Window 1)',
+        'window2_n': 'Sample Size (Window 2)',
+    }
+    
+    # Define the desired column order
+    column_order = ['route_id', 'window1_mean', 'window2_mean', 'diff', 'pct_change', 'p_value', 'window1_n', 'window2_n']
+    
+    # Reorder and rename columns
+    summary_pivoted = summary_pivoted[column_order]
+    summary_pivoted.columns = [column_mapping[col] for col in column_order]
 
-    # Reset index to make route_id a regular column
-    return summary_pivoted.reset_index()
+    return summary_pivoted
 
 def build_timeseries_plot(combined_data, selected_days, excluded_dates):
 
@@ -190,21 +210,114 @@ def build_timeseries_plot(combined_data, selected_days, excluded_dates):
     
     return fig
 
+
+def process_time_of_day(combined_data, selected_days, excluded_dates):
+    # Filter excluded dates
+    combined_data['date'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%Y-%m-%d')
+    combined_data = combined_data[~combined_data['date'].isin(excluded_dates)]
+    # Filter selected_days
+    combined_data['day_name'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%A')
+    combined_data = combined_data[combined_data['day_name'].isin(selected_days)]
+
+    combined_data['day_of_week'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%w')
+    combined_data['time'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%H:%M')
+
+    # Group by route_id, period, NOT day_of_week, and time and create columns for min, avg, and max travel time 
+    data_grouped = combined_data.groupby(['route_id', 'period', 'time']).agg({
+        'travel_time': ['min', 'mean', 'max']
+    }).reset_index()
+    
+    # Flatten column names
+    data_grouped.columns = ['route_id', 'period', 'time', 'travel_time_min', 'travel_time_mean', 'travel_time_max']
+
+    return data_grouped
+
+
+def build_time_of_day_plot(combined_data):
+    fig = go.Figure()
+    
+    # Create separate traces for Window 1 and Window 2
+    for period, color in [('window1', 'navy'), ('window2', 'blue')]:
+        # Create an explicit copy of the filtered data
+        period_data = combined_data[combined_data['period'] == period].copy()
+        
+        # Convert time strings to datetime for proper sorting
+        period_data['datetime'] = pd.to_datetime(period_data['time'], format='%H:%M')
+        period_data = period_data.sort_values('datetime')
+        
+        # Add the main line for both windows
+        fig.add_trace(go.Scatter(
+            x=period_data['time'],
+            y=period_data['travel_time_mean'],
+            name=period,
+            line=dict(color=color),
+            mode='lines'
+        ))
+        
+        # Add min/max range only for Window 2
+        if period == 'window2':
+            fig.add_trace(go.Scatter(
+                x=period_data['time'],
+                y=period_data['travel_time_max'],
+                name='Window 2 Range',
+                mode='lines',
+                line=dict(width=0),
+                showlegend=True,
+                legendgroup='range',
+                fillcolor='rgba(0, 0, 255, 0.2)'
+            ))
+            fig.add_trace(go.Scatter(
+                x=period_data['time'],
+                y=period_data['travel_time_min'],
+                name='Window 2 Range',
+                mode='lines',
+                line=dict(width=0),
+                fillcolor='rgba(0, 0, 255, 0.2)',
+                fill='tonexty',
+                showlegend=False,
+                legendgroup='range'
+            ))
+    
+    # Update layout
+    fig.update_layout(
+        title='Travel Time by Time of Day',
+        xaxis_title='Time of Day',
+        yaxis_title='Travel Time (minutes)',
+        showlegend=True,
+        xaxis=dict(
+            tickformat='%H:%M',
+            tickmode='array',
+            # Create ticks for every hour (00:00 to 23:00)
+            tickvals=[f"{i:02d}:00" for i in range(24)],
+            ticktext=[f"{i:02d}:00" for i in range(24)],
+            tickangle=45,
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray'
+        )
+    )
+    
+    return fig
+
+
 # -------------------------------------------------------------------------
 # Example usage:
-combined_data = timeseries_comparison(
-    route_ids=[13236, 13237],
-    window1_start="2024-09-01 00:00:00",
-    window1_end="2024-09-30 23:59:59",
-    window2_start="2024-10-01 00:00:00",
-    window2_end="2024-10-31 23:59:59",
-    username=os.getenv('CG_USERNAME'),
-    password=os.getenv('CG_PASSWORD')
-)
 
-print((combined_data))
 
-# # show the plot
-# fig = build_timeseries_plot(combined_data)
+# combined_data = timeseries_comparison(
+#     route_ids=[13236],
+#     window1_start="2024-09-01 00:00:00",
+#     window1_end="2024-09-30 23:59:59",
+#     window2_start="2024-10-01 00:00:00",
+#     window2_end="2024-10-31 23:59:59",
+#     username=os.getenv('CG_USERNAME'),
+#     password=os.getenv('CG_PASSWORD')
+# )
+
+# processed = process_time_of_day(combined_data, selected_days=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], excluded_dates=[])
+
+# print(summary_table(combined_data, selected_days=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], excluded_dates=[]))
+# # # show the plot
+# fig = build_time_of_day_plot(processed)
 # fig.show()
 
