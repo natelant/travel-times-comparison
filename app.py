@@ -84,7 +84,7 @@ window1_end_str = f"{window1_end} 23:59:59"
 window2_start_str = f"{window2_start} 00:00:00"
 window2_end_str = f"{window2_end} 23:59:59"
 
-# Define a function to fetch and cache the data
+# Move the cache function definition outside any button
 @st.cache_data
 def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
     return timeseries_comparison(
@@ -97,15 +97,15 @@ def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2
         password
     )
 
-# Add a button to trigger the analysis
-if st.button("Analyze Data"):
+# Split into two buttons
+if st.button("Fetch Data"):
     if not route_ids:
         st.warning("Please enter at least one Route ID")
     else:
         try:
             # Fetch and cache the data
-            st.info("Processing data... Please wait.")
-            timeseries_data = fetch_timeseries_data(
+            st.info("Fetching data... Please wait.")
+            st.session_state.timeseries_data = fetch_timeseries_data(
                 route_ids,
                 window1_start_str,
                 window1_end_str,
@@ -114,14 +114,21 @@ if st.button("Analyze Data"):
                 username,
                 password
             )
+            st.success("Data fetched successfully!")
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
 
-            # Get the summary table
-            summary_df = summary_table(timeseries_data)
+# Only show analyze button if data exists
+if 'timeseries_data' in st.session_state:
+    if st.button("Analyze Data"):
+        try:
+            # Get the summary table from cached data
+            summary_df = summary_table(st.session_state.timeseries_data)
             
             # Display the summary table
             st.subheader("Summary Statistics")
             st.dataframe(summary_df, use_container_width=True)
             
         except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+            st.error(f"An error occurred during analysis: {str(e)}")
 
