@@ -178,31 +178,37 @@ if st.button("Fetch Data"):
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
 
-# Add day of week filters
-st.subheader("Day of Week Filters")
-col1, col2 = st.columns(2)
+# Only show filters if data exists
+if 'timeseries_data' in st.session_state:
+    # Add day of week filters
+    st.subheader("Date Filters")
+    col1, col2 = st.columns(2)
 
-with col1:
-    st.write("Select days to include:")
-    days_of_week = {
-        'Monday': st.checkbox('Monday', value=True),
-        'Tuesday': st.checkbox('Tuesday', value=True),
-        'Wednesday': st.checkbox('Wednesday', value=True),
-        'Thursday': st.checkbox('Thursday', value=True),
-        'Friday': st.checkbox('Friday', value=True),
-        'Saturday': st.checkbox('Saturday', value=True),
-        'Sunday': st.checkbox('Sunday', value=True)
-    }
-    selected_days = [day for day, selected in days_of_week.items() if selected]
+    with col1:
+        st.write("Select days to include:")
+        days_of_week = {
+            'Monday': st.checkbox('Monday', value=True),
+            'Tuesday': st.checkbox('Tuesday', value=True),
+            'Wednesday': st.checkbox('Wednesday', value=True),
+            'Thursday': st.checkbox('Thursday', value=True),
+            'Friday': st.checkbox('Friday', value=True),
+            'Saturday': st.checkbox('Saturday', value=True),
+            'Sunday': st.checkbox('Sunday', value=True)
+        }
+        selected_days = [day for day, selected in days_of_week.items() if selected]
 
-with col2:
-    st.write("Enter dates to exclude (YYYY-MM-DD):")
-    excluded_dates_input = st.text_area(
-        "One date per line",
-        help="Example:\n2024-03-15\n2024-03-16",
-        key="excluded_dates"
-    )
-    excluded_dates = [date.strip() for date in excluded_dates_input.split('\n') if date.strip()]
+    with col2:
+        st.write("Enter dates to exclude (YYYY-MM-DD):")
+        excluded_dates_input = st.text_area(
+            "One date per line",
+            help="Example:\n2024-03-15\n2024-03-16",
+            key="excluded_dates"
+        )
+        excluded_dates = [date.strip() for date in excluded_dates_input.split('\n') if date.strip()]
+else:
+    # Initialize empty lists when data hasn't been fetched
+    selected_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    excluded_dates = []
 
 # Only show analyze button if data exists
 if 'timeseries_data' in st.session_state:
@@ -273,6 +279,8 @@ if 'timeseries_data' in st.session_state:
                     if uploaded_kml is None:
                         st.warning("Please upload a KML file to view the heatmap")
                     else:
+                        # Reset the file pointer to the beginning
+                        uploaded_kml.seek(0)
                         st.plotly_chart(
                             build_heatmaps(processed_data, uploaded_kml, route_directions[route_id]),
                             use_container_width=True,

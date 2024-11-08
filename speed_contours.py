@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 import plotly.graph_objects as go
 from geopy.distance import geodesic
-from pykml import parser
+from lxml import etree
 
 # Load environment variables
 load_dotenv()
@@ -53,16 +53,34 @@ def calculate_distances(intersections, direction):
     return distances
 
 # Read in a KML file for the y axis of the heatmap
-def read_kml_intersections(kml_file_path):
-    with open(kml_file_path, 'rb') as kml_file:
-        root = parser.parse(kml_file).getroot()
-        placemarks = root.findall('.//{http://www.opengis.net/kml/2.2}Placemark')
-        intersections = []
-        for placemark in placemarks:
-            name = placemark.find('{http://www.opengis.net/kml/2.2}name').text
-            coordinates = placemark.find('.//{http://www.opengis.net/kml/2.2}coordinates').text.split(',')
-            lat, lon = float(coordinates[1]), float(coordinates[0])
-            intersections.append((name, lat, lon))
+def read_kml_intersections(kml_file):
+    from lxml import etree
+    
+    # Modified to handle both file paths and UploadedFile objects
+    if hasattr(kml_file, 'read'):  # Check if it's a file-like object (UploadedFile)
+        content = kml_file.read()
+        # Remove the XML declaration before parsing
+        if content.startswith(b'<?xml'):
+            content = content.split(b'>', 1)[1]
+        root = etree.fromstring(content)
+    else:  # Handle regular file path
+        parser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
+        tree = etree.parse(kml_file, parser)
+        root = tree.getroot()
+            
+    # Define the KML namespace
+    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+    
+    # Find all Placemark elements
+    placemarks = root.findall('.//kml:Placemark', namespaces=ns)
+    intersections = []
+    
+    for placemark in placemarks:
+        name = placemark.find('kml:name', namespaces=ns).text
+        coords = placemark.find('.//kml:coordinates', namespaces=ns).text.strip().split(',')
+        lat, lon = float(coords[1]), float(coords[0])
+        intersections.append((name, lat, lon))
+    
     return intersections
 
 def get_speed_data(route_ids, start_datetime, end_datetime, username, password):
