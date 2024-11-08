@@ -6,4 +6,5 @@ requests
 scipy
 pytz
 python-dotenv
-
+geopy
+pykml
