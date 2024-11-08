@@ -11,6 +11,7 @@ from api.function import ClearGuideApiHandler
 from datetime import datetime, timezone
 import pytz
 from timeseries import timeseries_comparison, build_timeseries_plot, summary_table, process_time_of_day, build_time_of_day_plot
+from speed_contours import speed_comparison, process_speed_contours, build_heatmaps
 
 
 # Set the title and favicon that appear in the Browser's tab bar.
@@ -53,16 +54,44 @@ st.write(
 username = st.text_input("Enter your Clearguide username:")
 password = st.text_input("Enter your Clearguide password:", type="password")
 
-# Route ID input
-route_ids_input = st.text_input(
-    "Enter Route IDs (comma-separated):",
-    help="Example: 13236, 13237"
-)
+# Route ID input with directions
+st.subheader("Route IDs and Directions")
+route_info = []
+directions = ['Northbound', 'Southbound', 'Eastbound', 'Westbound']
 
+# Create a container for route inputs
+route_container = st.container()
 
+with route_container:
+    # Route 1
+    col1, col2 = st.columns(2)
+    with col1:
+        route_id1 = st.text_input("Route ID #1", key="route_1")
+    with col2:
+        direction1 = st.selectbox(
+            "Direction #1",
+            directions,
+            key="direction_1"
+        )
+    if route_id1:
+        route_info.append((route_id1.strip(), direction1))
+    
+    # Route 2
+    col1, col2 = st.columns(2)
+    with col1:
+        route_id2 = st.text_input("Route ID #2", key="route_2")
+    with col2:
+        direction2 = st.selectbox(
+            "Direction #2",
+            directions,
+            key="direction_2"
+        )
+    if route_id2:
+        route_info.append((route_id2.strip(), direction2))
 
-# Convert route IDs string to list of integers
-route_ids = [int(id.strip()) for id in route_ids_input.split(',')] if route_ids_input else []
+# Convert route IDs string to list of integers and store directions
+route_ids = [int(rid) for rid, _ in route_info] if route_info else []
+route_directions = {int(rid): direction for rid, direction in route_info}
 
 # Create two columns for the time windows
 col1, col2 = st.columns(2)
@@ -83,6 +112,14 @@ window1_end_str = f"{window1_end} 23:59:59"
 window2_start_str = f"{window2_start} 00:00:00"
 window2_end_str = f"{window2_end} 23:59:59"
 
+# After the date selection and before the Fetch Data button
+st.subheader("KML File Upload")
+uploaded_kml = st.file_uploader(
+    "Upload KML file containing intersection points",
+    type=['kml'],
+    help="The KML file is used to plot the intersections on the speed contour heatmaps."
+)
+
 # Move the cache function definition outside any button
 @st.cache_data
 def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
@@ -96,7 +133,17 @@ def fetch_timeseries_data(route_ids, window1_start_str, window1_end_str, window2
         password
     )
 
-    
+@st.cache_data
+def fetch_speed_contours_data(route_ids, window1_start_str, window1_end_str, window2_start_str, window2_end_str, username, password):
+    return speed_comparison(
+        route_ids,
+        window1_start_str,
+        window1_end_str,
+        window2_start_str,
+        window2_end_str,
+        username,
+        password
+    )
     
 
 # Split into two buttons
@@ -117,6 +164,15 @@ if st.button("Fetch Data"):
                 password
             )
 
+            st.session_state.speed_contours_data = fetch_speed_contours_data(
+                route_ids,
+                window1_start_str,
+                window1_end_str,
+                window2_start_str,
+                window2_end_str,
+                username,
+                password
+            )
 
             st.success("Data fetched successfully!")
         except Exception as e:
@@ -176,7 +232,7 @@ if 'timeseries_data' in st.session_state:
             #st.subheader("Time of Day Comparison by Route")
             for idx, route_id in enumerate(route_ids):
                 with plot_cols[idx]:
-                    st.write(f"Route {route_id}")
+                    st.write(f"Route {route_id} - {route_directions[route_id]}")
                     filtered_data = st.session_state.timeseries_data[
                         st.session_state.timeseries_data['route_id'] == route_id
                     ]
@@ -193,7 +249,7 @@ if 'timeseries_data' in st.session_state:
             #st.subheader("Time Series Comparison by Route")
             for idx, route_id in enumerate(route_ids):
                 with plot_cols[idx]:
-                    st.write(f"Route {route_id}")
+                    st.write(f"Route {route_id} - {route_directions[route_id]}")
                     filtered_data = st.session_state.timeseries_data[
                         st.session_state.timeseries_data['route_id'] == route_id
                     ]
@@ -203,6 +259,25 @@ if 'timeseries_data' in st.session_state:
                         use_container_width=True,
                         key=f"ts_plot_{route_id}"  # Added unique key
                     )
+
+            # Display speed contours heatmaps
+            for idx, route_id in enumerate(route_ids):
+                with plot_cols[idx]:
+                    st.write(f"Route {route_id} - {route_directions[route_id]}")
+                    filtered_data = st.session_state.speed_contours_data[
+                        st.session_state.speed_contours_data['route_id'] == route_id
+                    ]
+
+                    processed_data = process_speed_contours(filtered_data, selected_days=selected_days, excluded_dates=excluded_dates)
+
+                    if uploaded_kml is None:
+                        st.warning("Please upload a KML file to view the heatmap")
+                    else:
+                        st.plotly_chart(
+                            build_heatmaps(processed_data, uploaded_kml, route_directions[route_id]),
+                            use_container_width=True,
+                            key=f"heatmap_{route_id}"
+                        )
 
             
 
