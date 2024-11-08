@@ -10,6 +10,11 @@ import plotly.graph_objects as go
 from geopy.distance import geodesic
 from pykml import parser
 
+# Load environment variables
+load_dotenv()
+
+# Functions -----------------------------------------------------------------
+#-------------------------------------------------------------------------
 def parse_json_response(response, route_id):
 
     data = []
@@ -25,9 +30,10 @@ def parse_json_response(response, route_id):
             distance = measurement[0]
             speed = measurement[1]
             
-            # Convert Unix timestamp to datetime
+            # Convert Unix timestamp to datetime (UTC) and then to local time
             dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-            formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+            local_dt = dt.astimezone(pytz.timezone('America/Denver'))
+            formatted_time = local_dt.strftime('%Y-%m-%d %H:%M:%S')
             
             data.append([route_id, formatted_time, distance, speed])
     
@@ -85,7 +91,9 @@ def get_speed_data(route_ids, start_datetime, end_datetime, username, password):
 
             # Parse JSON response and append to all_parsed_data
             route_data = parse_json_response(response, route_id)
-            all_parsed_data.append(route_data)
+            # Convert list of lists to DataFrame before appending
+            df = pd.DataFrame(route_data, columns=['route_id', 'timestamp', 'distance', 'speed'])
+            all_parsed_data.append(df)
         
     except Exception as e:
         print(f"An error occurred: {str(e)}")
@@ -120,14 +128,16 @@ def speed_comparison(route_ids, window1_start, window1_end, window2_start, windo
     combined_data = pd.concat([data_window1, data_window2], ignore_index=True)
     return combined_data
 
-def process_speed_contours(combined_data, selected_days, excluded_dates):
+def process_speed_contours(combined_data, selected_days, excluded_dates): # assume that a single route is being processed here
+    # Convert timestamp to datetime first
+    combined_data['timestamp'] = pd.to_datetime(combined_data['timestamp'])
 
     # Filter excluded dates
-    combined_data['date'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%Y-%m-%d')
+    combined_data['date'] = combined_data['timestamp'].dt.strftime('%Y-%m-%d')
     combined_data = combined_data[~combined_data['date'].isin(excluded_dates)]
 
     # Filter selected days
-    combined_data['day_name'] = pd.to_datetime(combined_data['timestamp']).dt.strftime('%A')
+    combined_data['day_name'] = combined_data['timestamp'].dt.strftime('%A')
     combined_data = combined_data[combined_data['day_name'].isin(selected_days)]
 
     # Create a function to bin distances
@@ -142,7 +152,7 @@ def process_speed_contours(combined_data, selected_days, excluded_dates):
     summary = combined_data.groupby(['period', 'hour', 'binned_distance'])['speed'].mean().reset_index()
 
     # Pivot the table to have periods as columns
-    summary_pivoted = summary.pivot(index=['hour', 'binned_distance'], columns='period', values='speed').reset_index()
+    summary_pivoted = summary.pivot(index=['hour', 'binned_distance'], columns='period', values='speed').reset_index() # NOT GROUPING BY ROUTE_ID assume that a single route is being processed here
 
     # Calculate the difference and percent change
     summary_pivoted['diff'] = summary_pivoted['window2'] - summary_pivoted['window1']
@@ -195,7 +205,25 @@ def build_heatmaps(summary_pivoted, kml_file_path, direction):
         autorange='reversed'  # This inverts the y-axis
     )
 
+    return fig
 
 
+# -------------------------------------------------
+# Example usage:
+
+# example_data = speed_comparison(
+#     route_ids=[13236], 
+#     window1_start="2024-09-01 00:00:00", 
+#     window1_end="2024-09-30 23:59:59", 
+#     window2_start="2024-10-01 00:00:00", 
+#     window2_end="2024-10-31 23:59:59", 
+#     username=os.getenv('CG_USERNAME'), 
+#     password=os.getenv('CG_PASSWORD')
+# )
+
+# processed = process_speed_contours(example_data, selected_days=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], excluded_dates=[])
+
+# fig = build_heatmaps(processed, 'sample_data/State Street (9000 South to 11400 South).kml', 'Southbound')
+# fig.show()
 
 
